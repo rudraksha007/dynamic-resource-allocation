@@ -246,7 +246,7 @@ export class Scheduler {
                             }
                             if (i >= execAmt) {
                                 const proc = this.runningProcess!;          // store reference
-                                proc.status = ProcessState.Waiting;
+                                proc.status = ProcessState.Preempted;
 
                                 this.readyQueue.push(proc);
                                 this.readyQueue.sort((a, b) => b.priority - a.priority);
