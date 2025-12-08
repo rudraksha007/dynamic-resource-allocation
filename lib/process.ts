@@ -5,10 +5,33 @@ export enum ProcessType {
 }
 
 export enum ProcessState {
-    Terminated = -1,
+    Terminated = -2,
+    Preempted = -1,
     Waiting = 0,
     Running = 1,
     Completed = 2,
+}
+
+export type ProcessStatus = "Terminated" | "Preempted" | "Waiting" | "Running" | "Completed";
+
+export const ProcessStateMap: { [key in ProcessState]: ProcessStatus } = {
+    [ProcessState.Terminated]: "Terminated",
+    [ProcessState.Preempted]: "Preempted",
+    [ProcessState.Waiting]: "Waiting",
+    [ProcessState.Running]: "Running",
+    [ProcessState.Completed]: "Completed",
+}
+
+export type ProcessInfo = {
+    id: number;
+    name: string;
+    type: ProcessType;
+    priority: number;
+    cpuDemand: number;
+    cpuTime: number;
+    done: number;
+    memNeed: number;
+    status: ProcessStatus;
 }
 
 export class Process {

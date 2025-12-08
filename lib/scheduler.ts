@@ -1,4 +1,15 @@
-import { Process, ProcessState, ProcessType } from "./process";
+import { Process, ProcessInfo, ProcessState, ProcessStateMap, ProcessType } from "./process";
+
+export type Update = {
+    readyQueue: ProcessInfo[];
+    swappedQueue: ProcessInfo[];
+    runningProcess: ProcessInfo | null;
+    completedProcesses: ProcessInfo[];
+    memoryUsed: number;
+    swapUsed: number;
+    isPaused: boolean;
+    simulationSpeed: number;
+}
 
 export class Scheduler {
     readonly maxMemory: number;
@@ -6,11 +17,13 @@ export class Scheduler {
     readyQueue: Process[] = [];
     swappedQueue: Process[] = [];
     runningProcess: Process | null = null;
+    completedProcesses: Process[] = [];
     memoryUsed: number = 0
     swapUsed: number = 0;
     isPaused: boolean = false;
     simulationSpeed: number = 1;
     programCounter: number = 0;
+    onUpdateCallback: ((update: Update) => void) | null = null;
 
     constructor(maxMemory: number, maxSwap: number) {
         if (maxMemory <= 0 || maxSwap < 0 || maxMemory < maxSwap) {
@@ -18,6 +31,51 @@ export class Scheduler {
         }
         this.maxMemory = maxMemory;
         this.maxSwap = maxSwap;
+        this.processExecutionLoop();
+        this.startUpdateLoop();
+    }
+
+    private startUpdateLoop() {
+        setInterval(() => {
+            if (this.onUpdateCallback) {
+                this.onUpdateCallback({
+                    readyQueue: this.getReadyQueue(),
+                    swappedQueue: this.getSwappedQueue(),
+                    runningProcess: this.runningProcess ? this.getProcessInfo(this.runningProcess) : null,
+                    completedProcesses: this.completedProcesses.slice(-150).map(proc => this.getProcessInfo(proc)),
+                    memoryUsed: this.memoryUsed,
+                    swapUsed: this.swapUsed,
+                    isPaused: this.isPaused,
+                    simulationSpeed: this.simulationSpeed
+                }
+                );
+            }
+        }, 500 );
+    }
+
+    getProcessInfo(process: Process): ProcessInfo {
+        return {
+            id: process.id,
+            name: process.name,
+            type: process.type,
+            priority: process.priority,
+            cpuDemand: process.cpuDemand,
+            cpuTime: process.cpuTime,
+            done: process.done,
+            memNeed: process.memNeed,
+            status: ProcessStateMap[process.status],
+        };
+    }
+
+    onUpdate(callback: typeof this.onUpdateCallback) {
+        this.onUpdateCallback = callback;
+    }
+
+    getReadyQueue(): ProcessInfo[] {
+        return this.readyQueue.map(proc => this.getProcessInfo(proc));
+    }
+    getSwappedQueue(): ProcessInfo[] {
+        return this.swappedQueue.map(proc => this.getProcessInfo(proc));
     }
 
     private pushToReadyQueue(processes: Process[]) {
@@ -81,8 +139,15 @@ export class Scheduler {
                 for (let idx of premptable) {
                     const proc = this.readyQueue[idx];
                     this.memoryUsed -= proc.memNeed;
+                    // Only mark as Preempted if the process has actually started (done > 0)
+                    if (proc.done > 0) {
+                        proc.status = ProcessState.Preempted;
+                    } else {
+                        proc.status = ProcessState.Waiting;
+                    }
                     if (!this.addProcessToSwap(proc)) {
                         proc.status = ProcessState.Terminated;
+                        this.completedProcesses.push(proc);
                     }
                     this.readyQueue.splice(idx, 1);
                 }
@@ -95,6 +160,14 @@ export class Scheduler {
             }
         }
         return false; // Not enough memory or swap
+    }
+
+    setPaused(paused: boolean) {
+        this.isPaused = paused;
+    }
+
+    setSimulationSpeed(speed: number) {
+        this.simulationSpeed = speed;
     }
 
     addProcessToSwap(process: Process): boolean {
@@ -119,6 +192,7 @@ export class Scheduler {
                     const proc = this.swappedQueue[idx];
                     this.swapUsed -= proc.memNeed;
                     proc.status = ProcessState.Terminated;
+                    this.completedProcesses.push(proc);
                     this.swappedQueue.splice(idx, 1);
                 }
                 this.swappedQueue.push(process);
@@ -155,7 +229,7 @@ export class Scheduler {
                 else {
                     this.runningProcess = this.readyQueue.shift()!;
                     this.runningProcess.status = ProcessState.Running;
-                    const execAmt = (Math.random() * 5) + 1;
+                    const execAmt = Math.floor((Math.random() * 5) + 1);
                     await new Promise((res) => {
                         let i = 0;
                         const id = setInterval(() => {
@@ -164,6 +238,7 @@ export class Scheduler {
                             if (this.runningProcess!.done >= this.runningProcess!.cpuTime) {
                                 this.runningProcess!.status = ProcessState.Completed;
                                 this.memoryUsed -= this.runningProcess!.memNeed;
+                                this.completedProcesses.push(this.runningProcess!);
                                 this.runningProcess = null;
                                 this.trySwapIn();
                                 clearInterval(id);
