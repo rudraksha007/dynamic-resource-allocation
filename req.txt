@@ -1,0 +1,182 @@
+
+
+
+
+
+
+
+
+SCHOOL OF COMPUTER SCIENCE AND ENGINEERING
+ COURSE: CSE 316
+OPERATING SYSTEM
+SUBMITTED TO: Dr. Nahida Nazir
+TOPIC
+               Adaptive Resource Allocation in Multiprogramming Systems
+Team
+    • Siddharth Jain — Reg No. 12414579 — Roll No. 31
+    • Shashank Mishra — Reg No. 12416399 — Roll No. 32
+    • Rudransh — Reg No. 12416417 — Roll No. 33
+
+
+Table of Content
+
+
+1. Project Overview
+
+Introduction
+
+Modern multiprogramming operating systems must share finite CPU and memory resources among many concurrently active programs. Static allocation policies (fixed quotas or simple round-robin CPU times) can cause either resource under-utilization or contention and thrashing. This project implements an Adaptive Resource Allocation System that continuously monitors process behavior and system performance, and dynamically reallocates CPU time slices and memory (including swap management) in real-time to improve overall throughput and reduce bottlenecks.
+The system is implemented as an interactive simulator/web app that demonstrates priority‑aware scheduling, memory swapping, preemption, and an adaptive controller that reacts to observed metrics such as CPU utilization, memory pressure, page faults, and queue lengths.
+
+
+2. Objectives
+
+    • Design a monitoring pipeline to collect real-time metrics (CPU usage, memory usage, wait times, page faults).
+    • Implement adaptive scheduling and memory allocation policies that reallocate resources dynamically.
+    • Prevent bottlenecks by preempting or swapping out lower-priority/background processes, and by increasing resource shares for latency-sensitive or CPU-bound tasks when needed.
+    • Visualize system state and decisions for educational use.
+    • Provide configurable knobs to evaluate different adaptive strategies and compare their performance.
+
+3. Scope
+
+    • Simulate main memory and swap (configurable sizes).
+    • Support process types: System, User, Background with different base priorities.
+    • Adaptive controller to decide: time-slice lengths, preemption candidates, swap-in/swap-out actions, and temporary memory ballooning policy.
+    • Provide metrics and graphs for total throughput, average turnaround time, average waiting time, page-fault rate, and CPU utilization.
+    • Modular design so algorithms can be extended (e.g., add ML‑based resource estimators).
+
+
+4. Module-wise Breakdown
+
+A. Monitoring & Metrics Module
+
+Overview: Continuously collects process and system metrics required for adaptive decisions.
+Details:
+    • Per-process metrics: CPU usage (recent window), memory footprint, I/O wait time, state (ready/running/waiting), priority, page faults.
+    • System metrics: total CPU utilization, free/used memory, swap usage, ready queue length, average wait time, context switch rate.
+    • Implementation: lightweight sampling (configurable interval) and rolling-window aggregations.
+Outputs time-series data used by the Adaptive Controller.
+
+
+B. Scheduler Module
+
+Overview: Priority-based preemptive scheduler extended with adaptive time-slice control.
+Details:
+    • Ready Queue sorted by dynamic priority score.
+    • Priority calculation:
+        ◦ Priority = BasePriority + f(waitTime) + g(behavior) where f() implements aging and g() accounts for CPU vs I/O bound behaviour.
+    • Time-slice assignment: base quantum modified by controller (e.g., longer quanta for CPU-bound with low preemption cost).
+    • Preemption: highest-priority process can preempt current running process; scheduler respects minimum quantum.
+
+
+C. Memory Manager Module
+
+Overview: Simulated allocation for main memory and swap with adaptive swapping policy.
+Details:
+    • Main memory allocation on process arrival; if insufficient, controller may select candidate processes to preempt/swap based on priority and recent activity.
+    • Swap management: add to swap when memory pressure high; swap-in triggered when available memory and process priority warrants it.
+    • Page-fault handling: page-fault rate contributes to controller’s decision to change allocation or reorder swap priority.
+
+
+D. Adaptive Controller / Reallocator
+
+Overview: Central decision-making component that uses metrics to reallocate resources in real-time.
+Algorithmic Outline:
+    • Input: sliding-window metrics from Monitoring Module.
+    • Rules / Heuristics:
+        ◦ If CPU utilization > threshold and ready queue length growing → increase time-slice of CPU‑bound high‑priority processes or temporarily deprioritize background tasks.
+        ◦ If memory pressure > threshold (free memory low, swap increasing) → identify low-priority or idle processes to swap out; apply priority aging to avoid starvation.
+        ◦ If page-fault rate spikes → consider increasing memory share for affected processes or reduce their degree of multiprogramming.
+        ◦ Apply back-off thresholds and hysteresis to avoid oscillation.
+    • Optional: plug-in for ML model to predict short-term resource needs.
+
+
+E. Visualization & UI Module
+
+Overview: Web-based interface showing processes, memory map, CPU timeline, and controller actions.
+Details:
+    • Process table with live metrics and state badges.
+    • Memory map visualization (allocated segments, swapped-out processes).
+    • CPU timeline / Gantt chart showing running slices and context switches.
+    • Control panel to change thresholds, quantum ranges, and to inject processes.
+
+
+F. Persistence & Logging Module
+
+Overview: Saves simulation traces for offline analysis and reproducibility.
+Details:
+    • Export CSV/JSON traces with timestamped events (schedule decisions, swap events, metrics snapshot).
+    • Logging levels (info/debug) for detailed investigation.
+
+5. Functionalities
+
+    • Add and configure process arrivals (size, CPU need, I/O pattern, base priority).
+    • Start/pause/resume simulation; adjust simulation speed.
+    • Real-time adaptive reallocation: scheduler and memory manager respond based on controller’s decisions.
+    • Visual dashboards: CPU utilization, memory usage, swap usage, page-fault rate, throughput.
+    • Comparative experiments: toggle adaptive controller on/off and compare metrics.
+    • Export trace for further analysis.
+
+
+6. Technology Stack
+
+    • Frontend: Next.js + React + TypeScript (interactive UI and visualization).
+    • State management: React context / lightweight store.
+    • Charts: D3.js or charting library for time-series and Gantt visualizations.
+    • Build & tooling: Node.js.
+    • Version control: Git + GitHub.
+
+
+7. Flow Diagrams
+
+
+
+8. Implementation Details
+
+Repository Link
+       https://github.com/rudraksha007/dynamic-resource-allocation
+
+Repository highlights
+    • Priority-based scheduler with priority aging and preemption.
+    • Memory manager that simulates main memory and swap.
+    • Adaptive controller with configurable thresholds and actions.
+
+9. Testing & Evaluation
+
+    • Synthetic workloads: CPU-bound, I/O-bound, mixed, and bursty arrivals.
+    • Metrics recorded: average turnaround time, average waiting time, throughput, CPU utilization, page-fault rate.
+    • Experiments: compare baseline static scheduling vs. adaptive controller enabled; report numeric improvements in utilization and latency.
+
+
+10. Conclusion and Future Scope
+
+Conclusion
+The Adaptive Resource Allocation system demonstrates how monitoring-driven decisions can significantly improve utilization and responsiveness in multiprogramming systems. By combining priority-aware scheduling with adaptive memory management (swap policies and preemption), the simulator shows a practical approach to reduce bottlenecks and avoid thrashing.
+Future Scope
+    • Integrate reinforcement learning models to learn optimal allocation policies from traces.
+    • Add finer-grained memory simulation (virtual memory pages, working set estimation).
+    • Support distributed resource allocation across multiple nodes.
+    • Provide an educational mode with guided scenarios and automatic report generation.
+
+
+11. References
+
+    • Operating Systems textbooks (Silberschatz et al.)
+    • Research articles on scheduling and memory management
+    • Project repository: dynamic-resource-allocation (see Appendix)
+
+
+12. Appendices
+
+Appendix A — AI-Generated Project Elaboration
+A concise walkthrough of modules, algorithms, and expected interactions (kept in the repository README).
+
+Appendix B — Problem Statement
+Design and implement a simulator that adaptively reallocates CPU and memory resources among concurrently running programs to optimize utilization and prevent bottlenecks.
+
+Appendix C — Solution / Code Outline
+    • monitor/ — metric capture and aggregation
+    • scheduler/ — priority queue and time-slice management
+    • memory/ — allocation, swap queue, page-fault simulation
+    • controller/ — rules engine and adaptive heuristics
+    • ui/ — visualization and controls

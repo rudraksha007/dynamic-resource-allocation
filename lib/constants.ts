@@ -7,3 +7,5 @@ export const MIN_PRIORITY = 0;
 export const DEFAULT_SIMULATION_SPEED = 1;
 export const MIN_SIMULATION_SPEED = 0.5;
 export const MAX_SIMULATION_SPEED = 5;
+export const IO_PROBABILITY = 0.3; // 10% chance of IO operation per time unit
+export const METRIC_UPDATE_INTERVAL = 500; // in milliseconds

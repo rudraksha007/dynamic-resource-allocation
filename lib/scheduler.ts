@@ -50,7 +50,7 @@ export class Scheduler {
                 }
                 );
             }
-        }, 500 );
+        }, 500);
     }
 
     getProcessInfo(process: Process): ProcessInfo {
@@ -63,6 +63,10 @@ export class Scheduler {
             cpuTime: process.cpuTime,
             done: process.done,
             memNeed: process.memNeed,
+            endedAt: process.endedAt,
+            ioStartTime: process.ioStartTime,
+            ioTime: process.ioTime,
+            createdAt: process.createdAt,
             status: ProcessStateMap[process.status],
         };
     }
@@ -78,9 +82,11 @@ export class Scheduler {
         return this.swappedQueue.map(proc => this.getProcessInfo(proc));
     }
 
-    private pushToReadyQueue(processes: Process[]) {
+    private pushToReadyQueue(processes: Process[], isMemAllocated: boolean = false) {
         this.readyQueue.push(...processes);
-        this.memoryUsed += processes.reduce((acc, proc) => acc + proc.memNeed, 0);
+        if (!isMemAllocated) {
+            this.memoryUsed += processes.reduce((acc, proc) => acc + proc.memNeed, 0);
+        }
         this.readyQueue.sort((a, b) => b.priority - a.priority);
     }
 
@@ -214,6 +220,7 @@ export class Scheduler {
 
     async priorityGrowth() {
         for (let process of this.readyQueue) {
+            if( process.status === ProcessState.IO) continue;
             const waitingTime = Date.now() - process.updatedAt;
             process.updatedAt = Date.now();
             process.priority += Math.floor(waitingTime / 5000) * process.type;
@@ -227,37 +234,29 @@ export class Scheduler {
             else {
                 if (!this.runningProcess && this.readyQueue.length < 1) await new Promise(res => setTimeout(res, 1000));
                 else {
-                    this.runningProcess = this.readyQueue.shift()!;
+                    for (const proc of this.readyQueue) {
+                        if (proc.status === ProcessState.IO) continue;
+                        this.runningProcess = proc;
+                        break;
+                    }
+                    if (!this.runningProcess) {
+                        await new Promise(res => setTimeout(res, 1000));
+                        continue;
+                    }
                     this.runningProcess.status = ProcessState.Running;
                     const execAmt = Math.floor((Math.random() * 5) + 1);
-                    await new Promise((res) => {
-                        let i = 0;
-                        const id = setInterval(() => {
-                            if (this.isPaused) return;
-                            this.runningProcess!.done += 1;
-                            if (this.runningProcess!.done >= this.runningProcess!.cpuTime) {
-                                this.runningProcess!.status = ProcessState.Completed;
-                                this.memoryUsed -= this.runningProcess!.memNeed;
-                                this.completedProcesses.push(this.runningProcess!);
-                                this.runningProcess = null;
-                                this.trySwapIn();
-                                clearInterval(id);
-                                return res(null);
-                            }
-                            if (i >= execAmt) {
-                                const proc = this.runningProcess!;          // store reference
-                                proc.status = ProcessState.Preempted;
-
-                                this.readyQueue.push(proc);
-                                this.readyQueue.sort((a, b) => b.priority - a.priority);
-
-                                this.runningProcess = null;
-                                clearInterval(id);
-                                return res(null);     // << also add return!
-                            }
-                            i++;
-                        }, 1000 / this.simulationSpeed);
-                    });
+                    if (this.isPaused) return;
+                    const completed = await this.runningProcess.compute(execAmt, this.simulationSpeed);
+                    if (completed) {
+                        this.memoryUsed -= this.runningProcess!.memNeed;
+                        this.completedProcesses.push(this.runningProcess!);
+                        const idx = this.readyQueue.findIndex(p => p.id === this.runningProcess!.id);
+                        if (idx !== -1) this.readyQueue.splice(idx, 1);
+                        this.trySwapIn();
+                        this.runningProcess = null;
+                    } else {
+                        this.runningProcess = null;
+                    }
                     this.priorityGrowth();
                 }
             }

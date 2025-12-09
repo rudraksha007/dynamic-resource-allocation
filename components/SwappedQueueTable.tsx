@@ -16,7 +16,7 @@ export function SwappedQueueTable({ processes }: SwappedQueueTableProps) {
         <CardTitle className="text-lg">Swapped Queue</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[400px]">
           <Table>
             <TableHeader>
               <TableRow>
@@ -60,7 +60,10 @@ export function SwappedQueueTable({ processes }: SwappedQueueTableProps) {
                     <TableCell>{process.cpuDemand}%</TableCell>
                     <TableCell>{process.memNeed} MB</TableCell>
                     <TableCell>
-                      <Badge variant="outline">
+                      <Badge variant={
+                        process.status === "IO" ? "secondary" :
+                        "outline"
+                      }>
                         {process.status}
                       </Badge>
                     </TableCell>

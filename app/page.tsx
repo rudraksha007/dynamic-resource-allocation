@@ -5,10 +5,10 @@ import { useEffect, useRef, useState } from "react";
 import { ProcessMemoryPieChart } from "@/components/charts/ProcessMemoryPieChart";
 import { LineChart } from "@/components/charts/LineChart";
 import { ProcessTable } from "@/components/ProcessTable";
-import { SimulationControls } from "@/components/SimulationControls";
-import { AddProcessControls } from "@/components/AddProcessControls";
 import { ProcessType } from "@/lib/process";
 import { PieChart } from "@/components/charts/PieChart";
+import { MetricCalculator } from "@/lib/metric";
+import { ControlBar } from "@/components/ControlBar";
 
 type History = {
     timestamp: number;
@@ -17,6 +17,14 @@ type History = {
 
 export default function Home() {
   const scheduler = useRef<Scheduler | null>(null);
+  const metricCalculator = useRef<null | MetricCalculator>(null);
+  const [metrics, setMetrics] = useState<{ 
+    avgTAT: number; 
+    avgWT: number; 
+    throughput: number; 
+    avgIOWait: number; 
+    starvationTime: number;
+  }>({ avgTAT: NaN, avgWT: NaN, throughput: NaN, avgIOWait: NaN, starvationTime: 0 });
   const [history, setHistory] = useState<{
     memoryUsed: History[];
     swapUsed: History[];
@@ -38,30 +46,43 @@ export default function Home() {
   });
 
   useEffect(() => {
-    if (scheduler.current) return;
-    scheduler.current = new Scheduler(MAX_MEMORY, MAX_SWAP);
-
-    scheduler.current.onUpdate(({ readyQueue, swappedQueue, runningProcess, completedProcesses, memoryUsed, swapUsed, isPaused, simulationSpeed }) => {
-      const timestamp = Date.now();
+    if (!scheduler.current){
+      scheduler.current = new Scheduler(MAX_MEMORY, MAX_SWAP);
       
-      setState({
-        readyQueue: readyQueue,
-        swappedQueue: swappedQueue,
-        runningProcess: runningProcess,
-        completedProcesses: completedProcesses,
-        memoryUsed: memoryUsed,
-        swapUsed: swapUsed,
-        isPaused: isPaused,
-        simulationSpeed: simulationSpeed
-      });
+      scheduler.current.onUpdate((update) => {
+        const { readyQueue, swappedQueue, runningProcess, completedProcesses, memoryUsed, swapUsed, isPaused, simulationSpeed } = update;
+        const timestamp = Date.now();
+        
+        setState({
+          readyQueue: readyQueue,
+          swappedQueue: swappedQueue,
+          runningProcess: runningProcess,
+          completedProcesses: completedProcesses,
+          memoryUsed: memoryUsed,
+          swapUsed: swapUsed,
+          isPaused: isPaused,
+          simulationSpeed: simulationSpeed
+        });
+        
+        // Update history
+        setHistory(prev => ({
+          memoryUsed: [...prev.memoryUsed, { timestamp, value: memoryUsed }].slice(-100),
+          swapUsed: [...prev.swapUsed, { timestamp, value: swapUsed }].slice(-100),
+          cpuUsed: [...prev.cpuUsed, { timestamp, value: runningProcess?.cpuDemand || 0 }].slice(-100)
+        }));
 
-      // Update history
-      setHistory(prev => ({
-        memoryUsed: [...prev.memoryUsed, { timestamp, value: memoryUsed }].slice(-100),
-        swapUsed: [...prev.swapUsed, { timestamp, value: swapUsed }].slice(-100),
-        cpuUsed: [...prev.cpuUsed, { timestamp, value: runningProcess?.cpuDemand || 0 }].slice(-100)
-      }));
-    });
+        // Update metrics
+        if (metricCalculator.current) {
+          metricCalculator.current.recordUpdate(update);
+        }
+      });
+    }
+    if (!metricCalculator.current) {
+      metricCalculator.current = new MetricCalculator();
+      metricCalculator.current.updateMetricCallback = (avgTAT, avgWT, throughput, avgIOWait, starvationTime) => {
+        setMetrics({ avgTAT, avgWT, throughput, avgIOWait, starvationTime });
+      };
+    }
   }, []);
 
   const handlePauseToggle = () => {
@@ -116,23 +137,27 @@ export default function Home() {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold">Dynamic Resource Allocation Simulator</h1>
-        <p className="text-muted-foreground mt-2">
-          Monitor system resources and process scheduling in real-time
-        </p>
-      </div>
+    <div className="min-h-screen">
+      <ControlBar
+        isPaused={state.isPaused}
+        simulationSpeed={state.simulationSpeed}
+        onPauseToggle={handlePauseToggle}
+        onSpeedChange={handleSpeedChange}
+        onAddProcess={handleAddProcess}
+        avgTAT={metrics.avgTAT}
+        avgWT={metrics.avgWT}
+        throughput={metrics.throughput}
+        avgIOWait={metrics.avgIOWait}
+        starvationTime={metrics.starvationTime}
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <SimulationControls
-          isPaused={state.isPaused}
-          simulationSpeed={state.simulationSpeed}
-          onPauseToggle={handlePauseToggle}
-          onSpeedChange={handleSpeedChange}
-        />
-        <AddProcessControls onAddProcess={handleAddProcess} />
-      </div>
+      <div className="container mx-auto p-6 space-y-6">
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold">Dynamic Resource Allocation Simulator</h1>
+          <p className="text-muted-foreground mt-2">
+            Monitor system resources and process scheduling in real-time
+          </p>
+        </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <ProcessMemoryPieChart 
@@ -169,7 +194,7 @@ export default function Home() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <ProcessTable 
           title="Ready Queue"
-          processes={state.runningProcess ? [state.runningProcess, ...state.readyQueue] : state.readyQueue}
+          processes={state.readyQueue}
           emptyMessage="No processes in ready queue"
         />
         <ProcessTable 
@@ -181,7 +206,9 @@ export default function Home() {
           title="Last 150 Processes"
           processes={state.completedProcesses}
           emptyMessage="No completed processes yet"
+          showMetrics={true}
         />
+      </div>
       </div>
     </div>
   );

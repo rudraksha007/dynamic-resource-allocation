@@ -37,7 +37,7 @@ export function ReadyQueueTable({ processes, runningProcess }: ReadyQueueTablePr
           </div>
         )}
         
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[400px]">
           <Table>
             <TableHeader>
               <TableRow>
@@ -79,7 +79,11 @@ export function ReadyQueueTable({ processes, runningProcess }: ReadyQueueTablePr
                     </TableCell>
                     <TableCell>{process.cpuDemand}%</TableCell>
                     <TableCell>
-                      <Badge variant={process.status === "Waiting" ? "secondary" : "default"}>
+                      <Badge variant={
+                        process.status === "Waiting" ? "secondary" :
+                        process.status === "IO" ? "secondary" :
+                        "default"
+                      }>
                         {process.status}
                       </Badge>
                     </TableCell>
