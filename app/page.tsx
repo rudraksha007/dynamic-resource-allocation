@@ -18,6 +18,8 @@ type History = {
 export default function Home() {
   const scheduler = useRef<Scheduler | null>(null);
   const metricCalculator = useRef<null | MetricCalculator>(null);
+  const autoGenerateInterval = useRef<NodeJS.Timeout | null>(null);
+  const [isAutoGenerating, setIsAutoGenerating] = useState(false);
   const [metrics, setMetrics] = useState<{ 
     avgTAT: number; 
     avgWT: number; 
@@ -85,6 +87,33 @@ export default function Home() {
     }
   }, []);
 
+  useEffect(() => {
+    if (isAutoGenerating) {
+      autoGenerateInterval.current = setInterval(() => {
+        // Generate random number of processes (1-2) per second
+        if (state.isPaused) return;
+        const numProcesses = Math.floor(Math.random() * 2) + 1;
+        const types: ('system' | 'user' | 'background')[] = ['system', 'user', 'background'];
+        
+        for (let i = 0; i < numProcesses; i++) {
+          const randomType = types[Math.floor(Math.random() * types.length)];
+          handleAddProcess(randomType);
+        }
+      }, 1500);
+    } else {
+      if (autoGenerateInterval.current) {
+        clearInterval(autoGenerateInterval.current);
+        autoGenerateInterval.current = null;
+      }
+    }
+
+    return () => {
+      if (autoGenerateInterval.current) {
+        clearInterval(autoGenerateInterval.current);
+      }
+    };
+  }, [isAutoGenerating]);
+
   const handlePauseToggle = () => {
     if (scheduler.current) {
       scheduler.current.setPaused(!state.isPaused);
@@ -95,6 +124,10 @@ export default function Home() {
     if (scheduler.current) {
       scheduler.current.setSimulationSpeed(speed);
     }
+  };
+
+  const handleAutoGenerateToggle = () => {
+    setIsAutoGenerating(!isAutoGenerating);
   };
 
   const handleAddProcess = (type: 'system' | 'user' | 'background') => {
@@ -144,6 +177,8 @@ export default function Home() {
         onPauseToggle={handlePauseToggle}
         onSpeedChange={handleSpeedChange}
         onAddProcess={handleAddProcess}
+        isAutoGenerating={isAutoGenerating}
+        onAutoGenerateToggle={handleAutoGenerateToggle}
         avgTAT={metrics.avgTAT}
         avgWT={metrics.avgWT}
         throughput={metrics.throughput}

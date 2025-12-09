@@ -9,3 +9,4 @@ export const MIN_SIMULATION_SPEED = 0.5;
 export const MAX_SIMULATION_SPEED = 5;
 export const IO_PROBABILITY = 0.3; // 10% chance of IO operation per time unit
 export const METRIC_UPDATE_INTERVAL = 500; // in milliseconds
+export const BASE_QUANTUM_AMT = 12; // in milliseconds

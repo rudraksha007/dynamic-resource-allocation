@@ -1,4 +1,4 @@
-import { IO_PROBABILITY } from "./constants";
+import { BASE_QUANTUM_AMT, IO_PROBABILITY } from "./constants";
 
 export enum ProcessType {
     Background = 1,
@@ -73,7 +73,8 @@ export class Process {
         if (priority !== undefined) this.priority = priority;
     }
 
-    async compute(amt: number, simSpeed: number): Promise<boolean> {
+    async compute(simSpeed: number): Promise<boolean> {
+        const amt = Math.max(1, Math.floor(BASE_QUANTUM_AMT / this.type));
         let i = 0;
         return new Promise<boolean>((resolve) => {
             const id = setInterval(() => {
@@ -86,6 +87,8 @@ export class Process {
                     clearInterval(id);
                     resolve(true);
                 } else if (i >= amt) {
+                    const priorityDecrease = this.type === ProcessType.System ? 10 : this.type === ProcessType.User ? 7 : 3;
+                    this.priority = Math.max(0, this.priority - priorityDecrease);
                     if (Math.random() < IO_PROBABILITY) {
                         this.status = ProcessState.IO;
                         this.ioStartTime = Date.now();
@@ -97,6 +100,7 @@ export class Process {
                     } else {
                         this.status = ProcessState.Preempted;
                     }
+                    this.updatedAt = Date.now();
                     clearInterval(id);
                     resolve(false);
                 }

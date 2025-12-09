@@ -223,9 +223,16 @@ export class Scheduler {
             if( process.status === ProcessState.IO) continue;
             const waitingTime = Date.now() - process.updatedAt;
             process.updatedAt = Date.now();
-            process.priority += Math.floor(waitingTime / 5000) * process.type;
+            process.priority += Math.floor(waitingTime / (1000 * process.type));
         }
         this.readyQueue.sort((a, b) => b.priority - a.priority);
+        for (let process of this.swappedQueue) {
+            if( process.status === ProcessState.IO) continue;
+            const waitingTime = Date.now() - process.updatedAt;
+            process.updatedAt = Date.now();
+            process.priority += Math.floor(waitingTime / (1000 * process.type));
+        }
+        this.swappedQueue.sort((a, b) => b.priority - a.priority);
     }
 
     async processExecutionLoop() {
@@ -244,9 +251,8 @@ export class Scheduler {
                         continue;
                     }
                     this.runningProcess.status = ProcessState.Running;
-                    const execAmt = Math.floor((Math.random() * 5) + 1);
                     if (this.isPaused) return;
-                    const completed = await this.runningProcess.compute(execAmt, this.simulationSpeed);
+                    const completed = await this.runningProcess.compute(this.simulationSpeed);
                     if (completed) {
                         this.memoryUsed -= this.runningProcess!.memNeed;
                         this.completedProcesses.push(this.runningProcess!);

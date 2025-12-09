@@ -12,6 +12,8 @@ interface ControlBarProps {
   onPauseToggle: () => void;
   onSpeedChange: (speed: number) => void;
   onAddProcess: (type: 'system' | 'user' | 'background') => void;
+  isAutoGenerating: boolean;
+  onAutoGenerateToggle: () => void;
   avgTAT: number;
   avgWT: number;
   throughput: number;
@@ -25,6 +27,8 @@ export function ControlBar({
   onPauseToggle, 
   onSpeedChange,
   onAddProcess,
+  isAutoGenerating,
+  onAutoGenerateToggle,
   avgTAT,
   avgWT,
   throughput,
@@ -73,6 +77,14 @@ export function ControlBar({
                   {simulationSpeed.toFixed(1)}x
                 </span>
               </div>
+              
+              <Button 
+                onClick={onAutoGenerateToggle} 
+                variant={isAutoGenerating ? "default" : "outline"}
+                size="sm"
+              >
+                {isAutoGenerating ? "Stop Auto-Gen" : "Auto-Generate"}
+              </Button>
             </div>
 
             {/* Center: Key Metrics */}
