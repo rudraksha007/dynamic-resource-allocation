@@ -230,7 +230,7 @@ export class Scheduler {
             if( process.status === ProcessState.IO) continue;
             const waitingTime = Date.now() - process.updatedAt;
             process.updatedAt = Date.now();
-            process.priority += Math.floor(waitingTime / (1000 * process.type));
+            process.priority += Math.floor(waitingTime / (100 * process.type));
         }
         this.swappedQueue.sort((a, b) => b.priority - a.priority);
     }

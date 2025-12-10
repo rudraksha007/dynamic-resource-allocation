@@ -4,6 +4,7 @@ import { Scheduler, Update } from "@/lib/scheduler";
 import { useEffect, useRef, useState } from "react";
 import { ProcessMemoryPieChart } from "@/components/charts/ProcessMemoryPieChart";
 import { LineChart } from "@/components/charts/LineChart";
+import { ThroughputChart, WaitTimeChart } from "@/components/charts/MetricsLineChart";
 import { ProcessTable } from "@/components/ProcessTable";
 import { ProcessType } from "@/lib/process";
 import { PieChart } from "@/components/charts/PieChart";
@@ -31,10 +32,16 @@ export default function Home() {
     memoryUsed: History[];
     swapUsed: History[];
     cpuUsed: History[];
+    throughput: History[];
+    avgTat: History[];
+    avgWt: History[];
   }>({
     memoryUsed: [],
     swapUsed: [],
-    cpuUsed: []
+    cpuUsed: [],
+    throughput: [],
+    avgTat: [],
+    avgWt: []
   });
   const [state, setState] = useState<Update>({
     readyQueue: [],
@@ -70,7 +77,10 @@ export default function Home() {
         setHistory(prev => ({
           memoryUsed: [...prev.memoryUsed, { timestamp, value: memoryUsed }].slice(-100),
           swapUsed: [...prev.swapUsed, { timestamp, value: swapUsed }].slice(-100),
-          cpuUsed: [...prev.cpuUsed, { timestamp, value: runningProcess?.cpuDemand || 0 }].slice(-100)
+          cpuUsed: [...prev.cpuUsed, { timestamp, value: runningProcess?.cpuDemand || 0 }].slice(-100),
+          throughput: prev.throughput,
+          avgTat: prev.avgTat,
+          avgWt: prev.avgWt
         }));
 
         // Update metrics
@@ -83,6 +93,13 @@ export default function Home() {
       metricCalculator.current = new MetricCalculator();
       metricCalculator.current.updateMetricCallback = (avgTAT, avgWT, throughput, avgIOWait, starvationTime) => {
         setMetrics({ avgTAT, avgWT, throughput, avgIOWait, starvationTime });
+        const timestamp = Date.now();
+        setHistory(prev => ({
+          ...prev,
+          throughput: [...prev.throughput, { timestamp, value: throughput }].slice(-20),
+          avgTat: [...prev.avgTat, { timestamp, value: avgTAT }].slice(-20),
+          avgWt: [...prev.avgWt, { timestamp, value: avgWT }].slice(-20)
+        }));
       };
     }
   }, []);
@@ -225,6 +242,11 @@ export default function Home() {
         maxMemory={MAX_MEMORY}
         maxSwap={MAX_SWAP}
       />
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <ThroughputChart throughputData={history.throughput} />
+        <WaitTimeChart avgTatData={history.avgTat} avgWtData={history.avgWt} />
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <ProcessTable 

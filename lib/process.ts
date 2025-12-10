@@ -53,7 +53,7 @@ export class Process {
     createdAt: number = Date.now();
     ioStartTime: number = 0;
     ioTime: number = 0;
-    updatedAt: number = Date.now();
+    updatedAt: number;
     endedAt?: number;
     status: ProcessState = ProcessState.Waiting;
 
@@ -62,6 +62,7 @@ export class Process {
         this.name = name;
         this.cpuTime = cpuTime;
         this.memNeed = memNeed;
+        this.updatedAt = Date.now();
         if (cpuDemand !== undefined) {
             if (cpuDemand < 1) {
                 this.cpuDemand = 1;
@@ -87,7 +88,7 @@ export class Process {
                     clearInterval(id);
                     resolve(true);
                 } else if (i >= amt) {
-                    const priorityDecrease = this.type === ProcessType.System ? 10 : this.type === ProcessType.User ? 7 : 3;
+                    const priorityDecrease = this.type === ProcessType.System ? 20 : this.type === ProcessType.User ? 12 : 3;
                     this.priority = Math.max(0, this.priority - priorityDecrease);
                     if (Math.random() < IO_PROBABILITY) {
                         this.status = ProcessState.IO;

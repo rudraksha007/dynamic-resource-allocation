@@ -1,14 +1,16 @@
-import { METRIC_UPDATE_INTERVAL } from "./constants";
+import { AVG_LOOKBACK_WINDOW, METRIC_UPDATE_INTERVAL } from "./constants";
 import { Update } from "./scheduler";
 
 export class MetricCalculator {
     lastPID: number = -1;
     startedAt: number;
-    totalTAT: number = 0;
-    totalWT: number = 0;
-    totalIOTime: number = 0;
     completedProcesses: number = 0;
     longestWaitTime: number = 0;
+    
+    // Store last 20 processes' metrics
+    private tatHistory: number[] = [];
+    private wtHistory: number[] = [];
+    private ioTimeHistory: number[] = [];
 
     updateMetricCallback: ((avgTAT: number, avgWT: number, throughput: number, avgIOWait: number, starvationTime: number) => void) | null = null;
 
@@ -30,9 +32,23 @@ export class MetricCalculator {
             const cpuTime = process.cpuTime;
             const ioTime = process.ioTime ? process.ioTime / 1000 : 0;
             const waitingTime = turnaroundTime - cpuTime - ioTime;
-            this.totalTAT += turnaroundTime;
-            this.totalWT += waitingTime > 0 ? waitingTime : 0;
-            this.totalIOTime += ioTime;
+            
+            // Add to history arrays and maintain max size
+            this.tatHistory.push(turnaroundTime);
+            if (this.tatHistory.length > AVG_LOOKBACK_WINDOW) {
+                this.tatHistory.shift();
+            }
+            
+            this.wtHistory.push(waitingTime > 0 ? waitingTime : 0);
+            if (this.wtHistory.length > AVG_LOOKBACK_WINDOW) {
+                this.wtHistory.shift();
+            }
+            
+            this.ioTimeHistory.push(ioTime);
+            if (this.ioTimeHistory.length > AVG_LOOKBACK_WINDOW) {
+                this.ioTimeHistory.shift();
+            }
+            
             this.completedProcesses += 1;
             
             // Track longest wait time
@@ -45,12 +61,15 @@ export class MetricCalculator {
 
     runMetricLoop() {
         setInterval(() => {
-            if (this.completedProcesses === 0) return;
-            const avgTAT = this.totalTAT / this.completedProcesses;
-            const avgWT = this.totalWT / this.completedProcesses;
+            if (this.tatHistory.length === 0) return;
+            
+            // Calculate averages from last 20 processes
+            const avgTAT = this.tatHistory.reduce((sum, val) => sum + val, 0) / this.tatHistory.length;
+            const avgWT = this.wtHistory.reduce((sum, val) => sum + val, 0) / this.wtHistory.length;
+            const avgIOWait = this.ioTimeHistory.reduce((sum, val) => sum + val, 0) / this.ioTimeHistory.length;
+            
             const elapsedMinutes = (Date.now() - this.startedAt) / 60000;
             const throughput = this.completedProcesses / elapsedMinutes;
-            const avgIOWait = this.totalIOTime / this.completedProcesses;
             
             if (this.updateMetricCallback) {
                 this.updateMetricCallback(avgTAT, avgWT, throughput, avgIOWait, this.longestWaitTime);
