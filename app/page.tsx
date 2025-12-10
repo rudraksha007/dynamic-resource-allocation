@@ -10,6 +10,8 @@ import { ProcessType } from "@/lib/process";
 import { PieChart } from "@/components/charts/PieChart";
 import { MetricCalculator } from "@/lib/metric";
 import { ControlBar } from "@/components/ControlBar";
+import { SystemLog } from "@/components/SystemLog";
+import { Logger, LogEntry } from "@/lib/logger";
 
 type History = {
     timestamp: number;
@@ -20,7 +22,9 @@ export default function Home() {
   const scheduler = useRef<Scheduler | null>(null);
   const metricCalculator = useRef<null | MetricCalculator>(null);
   const autoGenerateInterval = useRef<NodeJS.Timeout | null>(null);
+  const logger = useRef<Logger>(Logger.getInstance());
   const [isAutoGenerating, setIsAutoGenerating] = useState(false);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [metrics, setMetrics] = useState<{ 
     avgTAT: number; 
     avgWT: number; 
@@ -55,8 +59,16 @@ export default function Home() {
   });
 
   useEffect(() => {
+    // Setup logger
+    logger.current.onLog((log) => {
+      setLogs(prev => [...prev, log].slice(-500));
+    });
+    
+    logger.current.info('System initialized');
+
     if (!scheduler.current){
       scheduler.current = new Scheduler(MAX_MEMORY, MAX_SWAP);
+      logger.current.success('Scheduler started');
       
       scheduler.current.onUpdate((update) => {
         const { readyQueue, swappedQueue, runningProcess, completedProcesses, memoryUsed, swapUsed, isPaused, simulationSpeed } = update;
@@ -134,6 +146,7 @@ export default function Home() {
   const handlePauseToggle = () => {
     if (scheduler.current) {
       scheduler.current.setPaused(!state.isPaused);
+      logger.current.info(state.isPaused ? 'Simulation resumed' : 'Simulation paused');
     }
   };
 
@@ -145,6 +158,7 @@ export default function Home() {
 
   const handleAutoGenerateToggle = () => {
     setIsAutoGenerating(!isAutoGenerating);
+    logger.current.info(isAutoGenerating ? 'Auto-generation disabled' : 'Auto-generation enabled');
   };
 
   const handleAddProcess = (type: 'system' | 'user' | 'background') => {
@@ -182,8 +196,13 @@ export default function Home() {
     );
 
     if (!success) {
-      console.warn(`Failed to add ${type} process - insufficient resources`);
+      logger.current.error(`Failed to add ${type} process - insufficient resources`);
     }
+  };
+
+  const handleClearLogs = () => {
+    logger.current.clear();
+    setLogs([]);
   };
 
   return (
@@ -267,6 +286,8 @@ export default function Home() {
         />
       </div>
       </div>
+
+      <SystemLog logs={logs} onClear={handleClearLogs} />
     </div>
   );
 }

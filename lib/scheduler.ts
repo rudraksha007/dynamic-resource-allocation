@@ -1,4 +1,5 @@
 import { Process, ProcessInfo, ProcessState, ProcessStateMap, ProcessType } from "./process";
+import { Logger } from "./logger";
 
 export type Update = {
     readyQueue: ProcessInfo[];
@@ -24,6 +25,7 @@ export class Scheduler {
     simulationSpeed: number = 1;
     programCounter: number = 0;
     onUpdateCallback: ((update: Update) => void) | null = null;
+    private logger = Logger.getInstance();
 
     constructor(maxMemory: number, maxSwap: number) {
         if (maxMemory <= 0 || maxSwap < 0 || maxMemory < maxSwap) {
@@ -112,12 +114,19 @@ export class Scheduler {
         }
         this.swapUsed -= acc;
         this.pushToReadyQueue(toSwapIn);
+        
+        // Log swap in operations
+        toSwapIn.forEach(proc => {
+            this.logger.info(`Process ${proc.name} swapped in from swap memory (Priority: ${proc.priority})`);
+        });
 
 
     }
 
     addProcess(name: string, cpuTime: number, memNeed: number, cpuDemand?: number, type?: ProcessType, priority?: number): boolean {
         const process = new Process(this.programCounter++, name, cpuTime, memNeed, cpuDemand, type, priority);
+        this.logger.info(`Process ${name} created (CPU: ${cpuTime}, Memory: ${memNeed}MB, Priority: ${priority || 0})`);
+        
         if (this.memoryUsed + process.memNeed <= this.maxMemory) {
             // Insert process based on priority
             for (let i = 0; i < this.readyQueue.length; i++) {
@@ -128,6 +137,7 @@ export class Scheduler {
                 }
             }
             this.pushToReadyQueue([process]);
+            this.logger.success(`Process ${name} added to ready queue`);
             return true;
         } else {
             if (this.readyQueue.length < 1) return false;
@@ -148,20 +158,26 @@ export class Scheduler {
                     // Only mark as Preempted if the process has actually started (done > 0)
                     if (proc.done > 0) {
                         proc.status = ProcessState.Preempted;
+                        this.logger.warn(`Process ${proc.name} preempted for higher priority process ${name}`);
                     } else {
                         proc.status = ProcessState.Waiting;
                     }
                     if (!this.addProcessToSwap(proc)) {
                         proc.status = ProcessState.Terminated;
+                        this.logger.error(`Process ${proc.name} terminated - swap memory full`);
                         this.completedProcesses.push(proc);
                     }
                     this.readyQueue.splice(idx, 1);
                 }
                 this.pushToReadyQueue([process]);
+                this.logger.success(`Process ${name} added to ready queue (preempted ${premptable.length} processes)`);
                 return true;
             } else {
                 if (!this.addProcessToSwap(process)) {
+                    this.logger.error(`Process ${name} rejected - insufficient memory and swap`);
                     return false; // Not enough memory or swap
+                } else {
+                    this.logger.info(`Process ${name} added to swap queue`);
                 }
             }
         }
@@ -180,6 +196,7 @@ export class Scheduler {
         if (this.swapUsed + process.memNeed <= this.maxSwap) {
             this.swappedQueue.push(process);
             this.swapUsed += process.memNeed;
+            this.logger.warn(`Process ${process.name} swapped out to swap memory`);
             return true;
         } else {
             if (this.swappedQueue.length < 1) return false;
@@ -198,6 +215,7 @@ export class Scheduler {
                     const proc = this.swappedQueue[idx];
                     this.swapUsed -= proc.memNeed;
                     proc.status = ProcessState.Terminated;
+                    this.logger.error(`Process ${proc.name} terminated from swap - insufficient swap space`);
                     this.completedProcesses.push(proc);
                     this.swappedQueue.splice(idx, 1);
                 }
@@ -251,9 +269,11 @@ export class Scheduler {
                         continue;
                     }
                     this.runningProcess.status = ProcessState.Running;
+                    this.logger.info(`Process ${this.runningProcess.name} started execution (CPU: ${this.runningProcess.done}/${this.runningProcess.cpuTime})`);
                     if (this.isPaused) return;
                     const completed = await this.runningProcess.compute(this.simulationSpeed);
                     if (completed) {
+                        this.logger.success(`Process ${this.runningProcess!.name} completed execution (TAT: ${((this.runningProcess!.endedAt! - this.runningProcess!.createdAt) / 1000).toFixed(2)}s)`);
                         this.memoryUsed -= this.runningProcess!.memNeed;
                         this.completedProcesses.push(this.runningProcess!);
                         const idx = this.readyQueue.findIndex(p => p.id === this.runningProcess!.id);
@@ -261,6 +281,13 @@ export class Scheduler {
                         this.trySwapIn();
                         this.runningProcess = null;
                     } else {
+                        // Check if process was preempted or went to IO
+                        const proc = this.runningProcess;
+                        if (proc && proc.status === ProcessState.IO) {
+                            this.logger.info(`Process ${proc.name} entered IO state (${(proc.ioTime! / 1000).toFixed(2)}s)`);
+                        } else if (proc && proc.status === ProcessState.Preempted) {
+                            this.logger.warn(`Process ${proc.name} preempted after quantum (Priority reduced)`);
+                        }
                         this.runningProcess = null;
                     }
                     this.priorityGrowth();

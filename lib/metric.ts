@@ -1,11 +1,15 @@
 import { AVG_LOOKBACK_WINDOW, METRIC_UPDATE_INTERVAL } from "./constants";
 import { Update } from "./scheduler";
+import { Logger } from "./logger";
 
 export class MetricCalculator {
     lastPID: number = -1;
     startedAt: number;
     completedProcesses: number = 0;
     longestWaitTime: number = 0;
+    private logger = Logger.getInstance();
+    private readonly STARVATION_THRESHOLD = 10; // seconds
+    private lastStarvationWarning: number = 0;
     
     // Store last 20 processes' metrics
     private tatHistory: number[] = [];
@@ -51,9 +55,16 @@ export class MetricCalculator {
             
             this.completedProcesses += 1;
             
-            // Track longest wait time
+            // Track longest wait time and check for starvation
             if (waitingTime > this.longestWaitTime) {
                 this.longestWaitTime = waitingTime;
+            }
+            
+            // Log starvation warning if waiting time exceeds threshold
+            // Only log once every 5 seconds to avoid spam
+            if (waitingTime > this.STARVATION_THRESHOLD && Date.now() - this.lastStarvationWarning > 5000) {
+                this.logger.warn(`Starvation detected: Process ${process.name} waited ${waitingTime.toFixed(2)}s before execution`);
+                this.lastStarvationWarning = Date.now();
             }
         }
         this.lastPID = lid;

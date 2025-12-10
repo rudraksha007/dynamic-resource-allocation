@@ -1,4 +1,5 @@
 import { BASE_QUANTUM_AMT, IO_PROBABILITY } from "./constants";
+import { Logger } from "./logger";
 
 export enum ProcessType {
     Background = 1,
@@ -56,6 +57,7 @@ export class Process {
     updatedAt: number;
     endedAt?: number;
     status: ProcessState = ProcessState.Waiting;
+    private logger = Logger.getInstance();
 
     constructor(id: number, name: string, cpuTime: number, memNeed: number, cpuDemand?: number, type?: ProcessType, priority?: number) {
         this.id = id;
